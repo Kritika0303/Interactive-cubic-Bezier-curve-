@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Interactive Bézier Curve</title>
+<style>
+    body { margin: 0; background: #111; overflow: hidden; }
+    canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+// ======================
+// Canvas Setup
+// ======================
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resize();
+window.onresize = resize;
+
+// ======================
+// Control Points
+// ======================
+let P0 = { x: canvas.width * 0.1, y: canvas.height * 0.5 }; // fixed
+let P3 = { x: canvas.width * 0.9, y: canvas.height * 0.5 }; // fixed
+
+// Dynamic points
+let P1 = { x: canvas.width * 0.3, y: canvas.height * 0.2, vx: 0, vy: 0 };
+let P2 = { x: canvas.width * 0.7, y: canvas.height * 0.8, vx: 0, vy: 0 };
+
+// Target positions for spring motion (updated by mouse)
+let targetP1 = { x: P1.x, y: P1.y };
+let targetP2 = { x: P2.x, y: P2.y };
+
+// Physics parameters
+const k = 0.1;       // spring constant
+const damping = 0.12;
+
+// ======================
+// Mouse Interaction
+// ======================
+canvas.addEventListener("mousemove", (e) => {
+    const x = e.clientX;
+    const y = e.clientY;
+
+    // Move both P1 and P2 towards mouse
+    targetP1.x = x * 0.6;
+    targetP1.y = y * 0.6;
+
+    targetP2.x = canvas.width - x * 0.6;
+    targetP2.y = canvas.height - y * 0.6;
+});
+
+// ======================
+// Spring–Damping Update
+// ======================
+function updatePoint(p, target) {
+    let ax = -k * (p.x - target.x) - damping * p.vx;
+    let ay = -k * (p.y - target.y) - damping * p.vy;
+
+    p.vx += ax;
+    p.vy += ay;
+
+    p.x += p.vx;
+    p.y += p.vy;
+}
+
+// ======================
+// Cubic Bézier Function
+// ======================
+function bezier(t, P0, P1, P2, P3) {
+    let u = 1 - t;
+    return {
+        x: (u ** 3) * P0.x +
+           3 * u * u * t * P1.x +
+           3 * u * t * t * P2.x +
+           t ** 3 * P3.x,
+
+        y: (u ** 3) * P0.y +
+           3 * u * u * t * P1.y +
+           3 * u * t * t * P2.y +
+           t ** 3 * P3.y
+    };
+}
+
+// ======================
+// Derivative (Tangent)
+// ======================
+function bezierDerivative(t, P0, P1, P2, P3) {
+    let u = 1 - t;
+
+    return {
+        x: 3 * u * u * (P1.x - P0.x) +
+           6 * u * t * (P2.x - P1.x) +
+           3 * t * t * (P3.x - P2.x),
+
+        y: 3 * u * u * (P1.y - P0.y) +
+           6 * u * t * (P2.y - P1.y) +
+           3 * t * t * (P3.y - P2.y)
+    };
+}
+
+// Normalize vector
+function normalize(v) {
+    let mag = Math.sqrt(v.x * v.x + v.y * v.y);
+    return mag === 0 ? { x: 0, y: 0 } : { x: v.x / mag, y: v.y / mag };
+}
+
+// ======================
+// Draw Everything
+// ======================
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // -------- Draw Curve --------
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#00FF88";
+    ctx.beginPath();
+
+    let pStart = bezier(0, P0, P1, P2, P3);
+    ctx.moveTo(pStart.x, pStart.y);
+
+    for (let t = 0; t <= 1; t += 0.01) {
+        let p = bezier(t, P0, P1, P2, P3);
+        ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+
+    // -------- Draw Tangents --------
+    ctx.strokeStyle = "yellow";
+    for (let t = 0; t <= 1; t += 0.1) {
+        let p = bezier(t, P0, P1, P2, P3);
+        let d = bezierDerivative(t, P0, P1, P2, P3);
+        let n = normalize(d);
+
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + n.x * 30, p.y + n.y * 30);
+        ctx.stroke();
+    }
+
+    // -------- Draw Control Points --------
+    ctx.fillStyle = "white";
+    [P0, P1, P2, P3].forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// ======================
+// Main Loop
+// ======================
+function animate() {
+    updatePoint(P1, targetP1);
+    updatePoint(P2, targetP2);
+
+    render();
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
